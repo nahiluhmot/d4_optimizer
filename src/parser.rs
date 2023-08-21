@@ -1,4 +1,5 @@
-use serde::{Deserialize, Serialize};
+use serde::ser::SerializeTuple;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
 use std::option::Option;
 use std::vec::Vec;
@@ -38,7 +39,11 @@ struct GenericClass {
 #[derive(Serialize, Deserialize)]
 struct ParagonBoard {
     name: String,
-    data: Vec<String>,
+    data: BoardData,
+}
+
+struct BoardData {
+    rows: Vec<Vec<Option<String>>>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -77,4 +82,37 @@ struct PerClassRequirements {
     rogue: Option<Vec<String>>,
     #[serde(rename = "Sorcerer")]
     sorcerer: Option<Vec<String>>,
+}
+
+impl<'de> Deserialize<'de> for BoardData {
+    fn deserialize<D>(_deserializer: D) -> Result<BoardData, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Ok(BoardData { rows: Vec::new() })
+    }
+}
+
+impl Serialize for BoardData {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut tup: S::SerializeTuple = serializer.serialize_tuple(self.rows.len())?;
+        let mut buffer = String::from("");
+
+        for row in self.rows.iter() {
+            buffer.clear();
+
+            for col in row.iter() {
+                col.as_ref().map(|cell| buffer.push_str(cell));
+
+                buffer.push_str(",");
+            }
+
+            tup.serialize_element(&buffer)?;
+        }
+
+        tup.end()
+    }
 }
