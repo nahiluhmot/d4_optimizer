@@ -1,6 +1,8 @@
+use serde::de::{SeqAccess, Visitor};
 use serde::ser::SerializeTuple;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
+use std::fmt;
 use std::option::Option;
 use std::vec::Vec;
 
@@ -84,12 +86,64 @@ struct PerClassRequirements {
     sorcerer: Option<Vec<String>>,
 }
 
+static DEFAULT_BOARD_HEIGHT: usize = 20;
+static DEFAULT_BOARD_WIDTH: usize = 20;
+
 impl<'de> Deserialize<'de> for BoardData {
-    fn deserialize<D>(_deserializer: D) -> Result<BoardData, D::Error>
+    fn deserialize<D>(deserializer: D) -> Result<BoardData, D::Error>
     where
         D: Deserializer<'de>,
     {
-        Ok(BoardData { rows: Vec::new() })
+        deserializer.deserialize_seq(BoardDataVisitor)
+    }
+}
+
+struct BoardDataVisitor;
+
+impl<'de> Visitor<'de> for BoardDataVisitor {
+    type Value = BoardData;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("an array of strings")
+    }
+
+    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+    where
+        A: SeqAccess<'de>,
+    {
+        let suggested_height = seq.size_hint().unwrap_or(0);
+        let height = if suggested_height > DEFAULT_BOARD_HEIGHT {
+            suggested_height
+        } else {
+            DEFAULT_BOARD_HEIGHT
+        };
+        let mut rows: Vec<Vec<Option<String>>> = Vec::with_capacity(height);
+
+        while let Some(serialized_row) = seq.next_element::<&str>()? {
+            let split_by_comma = serialized_row.split(',');
+
+            let (lower_bound, upper_bound) = split_by_comma.size_hint();
+            let suggested_width = upper_bound.unwrap_or(lower_bound);
+            let width = if suggested_width > DEFAULT_BOARD_WIDTH {
+                suggested_width
+            } else {
+                DEFAULT_BOARD_WIDTH
+            };
+
+            let mut row: Vec<Option<String>> = Vec::with_capacity(width);
+
+            for split in split_by_comma {
+                row.push(if split.is_empty() {
+                    None
+                } else {
+                    Some(String::from(split))
+                })
+            }
+
+            rows.push(row)
+        }
+
+        Ok(BoardData { rows })
     }
 }
 
@@ -98,16 +152,20 @@ impl Serialize for BoardData {
     where
         S: Serializer,
     {
-        let mut tup: S::SerializeTuple = serializer.serialize_tuple(self.rows.len())?;
-        let mut buffer = String::from("");
+        let mut tup = serializer.serialize_tuple(self.rows.len())?;
+        let mut buffer = String::new();
 
         for row in self.rows.iter() {
+            let last_idx = row.len() - 1;
+
             buffer.clear();
 
-            for col in row.iter() {
-                col.as_ref().map(|cell| buffer.push_str(cell));
+            for (idx, cell) in row.iter().enumerate() {
+                cell.as_ref().map(|cell| buffer.push_str(cell));
 
-                buffer.push_str(",");
+                if idx != last_idx {
+                    buffer.push(',');
+                }
             }
 
             tup.serialize_element(&buffer)?;
