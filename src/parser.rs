@@ -41,11 +41,11 @@ struct GenericClass {
 #[derive(Serialize, Deserialize)]
 struct ParagonBoard {
     name: String,
-    data: BoardData,
+    data: BoardData<String>,
 }
 
-struct BoardData {
-    rows: Vec<Vec<Option<String>>>,
+struct BoardData<A> {
+    rows: Vec<Vec<Option<A>>>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -89,8 +89,8 @@ struct PerClassRequirements {
 static DEFAULT_BOARD_HEIGHT: usize = 20;
 static DEFAULT_BOARD_WIDTH: usize = 20;
 
-impl<'de> Deserialize<'de> for BoardData {
-    fn deserialize<D>(deserializer: D) -> Result<BoardData, D::Error>
+impl<'de> Deserialize<'de> for BoardData<String> {
+    fn deserialize<D>(deserializer: D) -> Result<BoardData<String>, D::Error>
     where
         D: Deserializer<'de>,
     {
@@ -101,7 +101,7 @@ impl<'de> Deserialize<'de> for BoardData {
 struct BoardDataVisitor;
 
 impl<'de> Visitor<'de> for BoardDataVisitor {
-    type Value = BoardData;
+    type Value = BoardData<String>;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_str("an array of strings")
@@ -147,7 +147,7 @@ impl<'de> Visitor<'de> for BoardDataVisitor {
     }
 }
 
-impl Serialize for BoardData {
+impl Serialize for BoardData<String> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
